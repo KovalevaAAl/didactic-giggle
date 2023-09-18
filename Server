@@ -1,0 +1,113 @@
+const fastify = require('fastify');
+const { Sequelize, DataTypes } = require('sequelize');
+const fastifySequelize = require('fastify-sequelize');
+const sequelizeSlugify = require('sequelize-slugify');
+
+const app = fastify();
+
+// Подключение к базе данных SQLite3
+const sequelize = new Sequelize({
+  dialect: 'sqlite',
+  storage: 'database.sqlite'
+});
+
+// Определение модели для таблицы
+const Table = sequelize.define('Table', {
+  name: {
+    type: DataTypes.STRING,
+    allowNull: false
+  },
+  value: {
+    type: DataTypes.INTEGER,
+    allowNull: false
+  },
+  uuid: {
+    type: DataTypes.UUID,
+    defaultValue: Sequelize.UUIDV4,
+    unique: true
+  },
+  slug: {
+    type: DataTypes.STRING,
+    unique: true
+  }
+});
+
+// Добавление плагина sequelize-slugify
+sequelizeSlugify.slugifyModel(Table, {
+  source: ['name']
+});
+
+// Инициализация fastify-sequelize плагина
+app.register(fastifySequelize, {
+  sequelize,
+  models: [Table], // Передаем модели, которые будем использовать
+  options: {
+    // Параметры подключения, если необходимо
+  }
+});
+
+// Маршрут: Получить все записи из таблицы
+app.get('/data', async (req, res) => {
+  try {
+    const data = await Table.findAll();
+    res.send(data);
+  } catch (error) {
+    res.status(500).send('Ошибка при получении данных');
+  }
+});
+
+// Маршрут: Добавить новую запись в таблицу
+app.post('/data', async (req, res) => {
+  const { name, value } = req.body;
+
+  try {
+    const data = await Table.create({ name, value });
+    res.send(data);
+  } catch (error) {
+    res.status(500).send('Ошибка при добавлении данных');
+  }
+});
+
+// Маршрут: Удалить запись из таблицы (по uuid)
+app.delete('/data/:uuid', async (req, res) => {
+  const { uuid } = req.params;
+
+  try {
+    await Table.destroy({ where: { uuid } });
+    res.send('Запись успешно удалена');
+  } catch (error) {
+    res.status(500).send('Ошибка при удалении данных');
+  }
+});
+
+// Маршрут: Изменить запись в таблице (по slug)
+app.put('/data/:slug', async (req, res) => {
+  const { slug } = req.params;
+  const { name, value } = req.body;
+
+  try {
+    await Table.update({ name, value }, { where: { slug } });
+    res.send('Запись успешно изменена');
+  } catch (error) {
+    res.status(500).send('Ошибка при изменении данных');
+  }
+});
+
+// Маршрут: Стандартный GET ('/')
+app.get('/', (req, res) => {
+  res.send('Привет, это стандартный маршрут!');
+});
+
+// Запуск сервера
+const start = async () => {
+    try {
+      await sequelize.sync();
+      await app.listen({port: 3000})
+      console.log('Сервер запущен на порту 3000');
+    } catch (error) {
+      console.error('Ошибка запуска сервера:', error);
+      process.exit(1);
+    }
+  };
+  
+  start();
